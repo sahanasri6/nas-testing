@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>NAS Image Viewer</title></head>
+<body>
+  <h3>Step 1: Get session ID</h3>
+  <input id="pass" type="password" placeholder="NAS password">
+  <button id="loginBtn">Open NAS login</button>
+  <p>A new tab shows JSON like <code>{"data":{"sid":"XXXX"},"success":true}</code>. Copy only the XXXX value.</p>
+
+  <h3>Step 2: Show image</h3>
+  <input id="sid" type="text" placeholder="Paste sid here" size="40">
+  <button id="loadImageBtn">Load NAS Image</button>
+  <br><br>
+  <img id="nasImage" style="max-width:800px; display:none;" alt="NAS Image">
+  <pre id="response" style="white-space:pre-wrap;"></pre>
+
+  <form id="loginForm" method="POST" target="_blank" style="display:none">
+    <input name="api" value="SYNO.API.Auth">
+    <input name="version" value="6">
+    <input name="method" value="login">
+    <input name="account" id="account">
+    <input name="passwd" id="passwd">
+    <input name="session" value="FileStation">
+    <input name="format" value="sid">
+  </form>
+
+<script>
+const NAS       = "http://169.254.76.96:5000";
+const USERNAME  = "SahanaSri";
+const FILE_PATH = "/TestingImageloader/"; // DSC_0842.JPG
+
+const image = document.getElementById("nasImage");
+const out   = document.getElementById("response");
+
+function testFilePath(p) {
+  const example = "Example: /TestingImageloader/DSC_0842.JPG";
+  if (!p || !p.trim()) return `FILE_PATH is empty. ${example}`;
+  if (/(^|\/)\.\.(\/|$)/.test(p)) return `FILE_PATH must not contain '..'. ${example}`;
+  if (!/^\/[^/]+(\/[^/]+)*\/[^/]+\.(jpe?g|png|gif|bmp|webp|tiff?|heic)$/i.test(p))
+    return `Give the correct file path with folder AND image file name. You gave '${p}'. ${example}`;
+  return null;
+}
+
+// Step 1: browser navigation (no CORS rule applies)
+document.getElementById("loginBtn").addEventListener("click", () => {
+  const form = document.getElementById("loginForm");
+  form.action = `${NAS}/webapi/entry.cgi`;
+  document.getElementById("account").value = USERNAME;
+  document.getElementById("passwd").value  = document.getElementById("pass").value;
+  form.submit();
+  document.getElementById("pass").value = "";
+});
+
+// Step 2: <img> tag (no CORS rule applies)
+document.getElementById("loadImageBtn").addEventListener("click", () => {
+  const pathError = testFilePath(FILE_PATH);
+  if (pathError) { out.textContent = "Error: " + pathError; return; }
+
+  const sid = document.getElementById("sid").value.trim();
+  if (!sid) { out.textContent = "Error: Paste the sid first."; return; }
+
+  const p = encodeURIComponent(FILE_PATH);
+  const s = encodeURIComponent(sid);
+  const thumb = `${NAS}/webapi/entry.cgi?api=SYNO.FileStation.Thumb&version=2&method=get&path=${p}&size=large&_sid=${s}`;
+  const full  = `${NAS}/webapi/entry.cgi?api=SYNO.FileStation.Download&version=2&method=download&path=${p}&mode=open&_sid=${s}`;
+
+  out.textContent = "Connecting to NAS...";
+  image.style.display = "none";
+  let triedFull = false;
+
+  image.onload = () => {
+    image.style.display = "block";
+    out.textContent = "Image displayed successfully.";
+  };
+  image.onerror = () => {
+    if (!triedFull) { triedFull = true; image.src = full; return; }
+    out.textContent = "Error: image failed. Check the sid (it may be expired or wrong) and the file path.";
+  };
+  image.src = thumb;
+});
+</script>
+</body>
+</html>
